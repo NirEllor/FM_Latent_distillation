@@ -31,6 +31,7 @@ class Args:
         self.label_dim = 0
         self.augment_dim = 0
         self.num_blocks = 4
+        self.num_res_blocks = 2
         self.dropout = 0.1
         self.label_dropout = 0.0
         self.num_classes = None
