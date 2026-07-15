@@ -82,7 +82,7 @@ for DIM in "${DIMS[@]}"; do
     --mem=30G -c4 --time=2-00 --gres=gpu:1 \
     --mail-type=ALL --mail-user="$EMAIL" \
     --job-name=fm_train_d${DIM} \
-    --wrap "$RUN SCALE_FACTOR=\$(python compute_ae_scale_factor.py --ckpt $CHECKPOINT_DIR/ae_${DIM}.pt --latent_dim $DIM 2>/dev/null | grep -- '--scale_factor' | tail -1 | awk '{print \$2}') && echo \"Scale factor: \$SCALE_FACTOR\" && python train_flow_latent.py \
+    --wrap "bash -c '$RUN SCALE_FACTOR=\$(python compute_ae_scale_factor.py --ckpt $CHECKPOINT_DIR/ae_${DIM}.pt --latent_dim $DIM 2>/dev/null | grep -- \"--scale_factor\" | tail -1 | awk \"{print \\\$2}\") && echo \"Scale factor: \$SCALE_FACTOR\" && python train_flow_latent.py \
       --exp latent_${DIM} \
       --dataset cifar10 \
       --datadir $DATADIR \
@@ -104,7 +104,7 @@ for DIM in "${DIMS[@]}"; do
       --use_ema \
       --ema_decay $EMA_DECAY \
       --save_content \
-      --save_content_every $SAVE_STEP" \
+      --save_content_every $SAVE_STEP'" \
     | awk '{print $NF}')
 
   echo "  ✓ Submitted fm_train dim=$DIM (channels=$NUM_CHANNELS, nf=$NF, bottleneck=$((NF*2))) → Job $JOB"

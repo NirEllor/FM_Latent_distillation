@@ -10,7 +10,7 @@ cd "$(dirname "$SCRIPT_DIR")"
 JOB=$(sbatch $NODE_ARGS \
   --mem=30G -c4 --gres=gpu:1 --time=00:30:00 \
   --job-name=verify_fm_shapes \
-  --wrap "$RUN python slurm/verify_fm_shapes.py" \
+  --wrap "bash -c '$RUN python slurm/verify_fm_shapes.py'" \
   | awk '{print $NF}')
 
 echo "Submitted verification job: $JOB"
