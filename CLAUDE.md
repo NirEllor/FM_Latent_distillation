@@ -287,6 +287,13 @@ Edit `slurm/config.sh`:
 - `RUN`: venv activation command (edit the venv path)
 - `CHECKPOINT_DIR`: where your `ae_<dim>.pt` files are stored (relative or absolute)
 
+### Verify Setup Before Submitting
+```bash
+# Check that FM models can be instantiated with correct shapes
+python slurm/verify_fm_shapes.py
+```
+Output should show all 6 dimensions with ✓ OK status.
+
 ### Submit Jobs
 ```bash
 # Submit all 6 FM training jobs (one per AE dim)
@@ -312,6 +319,9 @@ All 6 FM models train **in parallel**, each using 1 GPU for 1000 epochs (≈2 da
 - **Deterministic encoding**: `ConvAutoencoder.encode()` is fully deterministic (no KL sampling). Same image always → same latent
 - **Scale factor**: Computed **inline per job** by `compute_ae_scale_factor.py` — ensures correct normalization per checkpoint
 - **Architecture**: `ddpm++` (EDM-style conv U-Net), sized for 4×4 spatial latent grid
+  - **Bottleneck scaling**: `--nf` (base model channels) is set to `latent_dim * 8`, ensuring bottleneck has **64× the input channel capacity**
+  - Prevents information loss by maintaining proportional bottleneck capacity across all AE dimensions
+  - Example: ae_256 (16 channels) → nf=2048 → bottleneck=4096 channels at 1×1
 - **Checkpoints**: Saved to `saved_info/latent_flow/cifar10/latent_<dim>/` every 50 epochs
 
 ---

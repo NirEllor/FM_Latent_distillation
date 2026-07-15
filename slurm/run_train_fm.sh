@@ -51,6 +51,18 @@ GRAD_CLIP=1.0
 CH_MULT="1 2 2"
 ATTN_RES="4"
 
+# Base model channels (nf). This determines the bottleneck capacity.
+# With ch_mult=[1,2,2], bottleneck_channels = nf * 2.
+# Set proportionally to latent dimension to ensure adequate bottleneck capacity:
+#   ae_64 (4 ch)  → nf=128 → bottleneck=256 (64× input capacity)
+#   ae_128 (8 ch) → nf=256 → bottleneck=512 (64× input capacity)
+#   ae_256 (16 ch)→ nf=512 → bottleneck=1024 (64× input capacity)
+#   ae_384 (24 ch)→ nf=768 → bottleneck=1536 (64× input capacity)
+#   ae_512 (32 ch)→ nf=1024→ bottleneck=2048 (64× input capacity)
+#   ae_1024(64 ch)→ nf=2048→ bottleneck=4096 (64× input capacity)
+# Formula: nf = latent_dim * 8 (ensures bottleneck = latent_dim * 16, i.e., 64× capacity)
+NF_BASE=8  # nf = latent_dim * NF_BASE
+
 # ============================================================================
 # Submit training jobs
 # ============================================================================
@@ -62,8 +74,9 @@ echo ""
 
 IDS=()
 for DIM in "${DIMS[@]}"; do
-  # Pre-compute expected channel count
+  # Pre-compute expected channel count and model_channels (nf)
   NUM_CHANNELS=$((DIM / 16))
+  NF=$((DIM * NF_BASE))
 
   JOB=$(sbatch $DEP_FLAG $NODE_ARGS \
     --mem=30G -c4 --time=2-00 --gres=gpu:1 \
@@ -82,6 +95,7 @@ for DIM in "${DIMS[@]}"; do
       --f 8 \
       --num_in_channels $NUM_CHANNELS \
       --num_out_channels $NUM_CHANNELS \
+      --nf $NF \
       --ch_mult $CH_MULT \
       --attn_resolutions $ATTN_RES \
       --num_epoch $NUM_EPOCH \
@@ -93,7 +107,7 @@ for DIM in "${DIMS[@]}"; do
       --save_content_every $SAVE_STEP" \
     | awk '{print $NF}')
 
-  echo "  ✓ Submitted fm_train dim=$DIM (channels=$NUM_CHANNELS) → Job $JOB"
+  echo "  ✓ Submitted fm_train dim=$DIM (channels=$NUM_CHANNELS, nf=$NF, bottleneck=$((NF*2))) → Job $JOB"
   IDS+=($JOB)
 done
 
