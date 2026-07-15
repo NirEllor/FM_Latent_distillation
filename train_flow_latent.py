@@ -22,6 +22,7 @@ from accelerate.utils import set_seed
 from datasets_prep import get_dataset
 from EMA import EMA
 from models import create_network
+from models.ae_backends import load_first_stage_model, encode_to_latent, decode_from_latent
 from torchdiffeq import odeint_adjoint as odeint
 
 # faster training
@@ -46,9 +47,15 @@ def sample_from_model(model, x_0):
 
 # %%
 def train(args):
-    from diffusers.models import AutoencoderKL
-
     assert torch.cuda.is_available(), "Training currently requires at least one GPU."
+
+    if args.ae_type == "conv_ae":
+        assert args.ae_latent_dim is not None, "ae_latent_dim must be specified when ae_type='conv_ae'"
+        expected_channels = args.ae_latent_dim // 16
+        if args.num_in_channels != expected_channels and args.num_in_channels != 3:
+            raise ValueError(f"num_in_channels ({args.num_in_channels}) should be {expected_channels} for ae_latent_dim={args.ae_latent_dim}")
+        args.num_in_channels = expected_channels
+        args.num_out_channels = expected_channels
 
     # Setup accelerator:
     accelerator = Accelerator()
@@ -72,13 +79,9 @@ def train(args):
     if args.use_grad_checkpointing and "DiT" in args.model_type:
         model.set_gradient_checkpointing()
 
-    first_stage_model = AutoencoderKL.from_pretrained(args.pretrained_autoencoder_ckpt).to(device, dtype=dtype)
-    first_stage_model = first_stage_model.eval()
-    first_stage_model.train = False
-    for param in first_stage_model.parameters():
-        param.requires_grad = False
+    first_stage_model = load_first_stage_model(args, device, dtype)
 
-    accelerator.print("AutoKL size: {:.3f}MB".format(get_weight(first_stage_model)))
+    accelerator.print("Autoencoder size: {:.3f}MB".format(get_weight(first_stage_model)))
     accelerator.print("FM size: {:.3f}MB".format(get_weight(model)))
 
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.0)
@@ -140,7 +143,7 @@ def train(args):
             if is_latent_data:
                 z_0 = x_0 * args.scale_factor
             else:
-                z_0 = first_stage_model.encode(x_0).latent_dist.sample().mul_(args.scale_factor)
+                z_0 = encode_to_latent(first_stage_model, x_0, args)
             # sample t
             t = torch.rand((z_0.size(0),), dtype=dtype, device=device)
             t = t.view(-1, 1, 1, 1)
@@ -181,7 +184,7 @@ def train(args):
                     sample_model = partial(model, y=y)
                     # sample_func = lambda t, x: model(t, x, y=y)
                     fake_sample = sample_from_model(sample_model, rand)[-1]
-                    fake_image = first_stage_model.decode(fake_sample / args.scale_factor).sample
+                    fake_image = decode_from_latent(first_stage_model, fake_sample, args)
                 torchvision.utils.save_image(
                     fake_image,
                     os.path.join(exp_path, "image_epoch_{}.png".format(epoch)),
@@ -299,6 +302,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_head_channels", type=int, default=-1, help="number of head channels")
 
     parser.add_argument("--pretrained_autoencoder_ckpt", type=str, default="stabilityai/sd-vae-ft-mse")
+    parser.add_argument("--ae_type", type=str, default="sd_vae", choices=["sd_vae", "conv_ae"],
+                        help="Type of autoencoder: 'sd_vae' (default, HuggingFace Stable Diffusion VAE) or 'conv_ae' (custom ConvAutoencoder)")
+    parser.add_argument("--ae_latent_dim", type=int, default=None, choices=[64, 128, 256, 384, 512, 1024],
+                        help="Latent dimension for conv_ae (required when ae_type='conv_ae')")
 
     # training
     parser.add_argument("--exp", default="experiment_cifar_default", help="name of experiment")

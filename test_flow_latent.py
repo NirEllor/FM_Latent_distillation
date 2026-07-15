@@ -15,6 +15,7 @@ import torch.distributed as dist
 import torchvision
 from ddp_utils import init_processes
 from models import create_network
+from models.ae_backends import load_first_stage_model, decode_from_latent
 from pytorch_fid.fid_score import calculate_fid_given_paths
 from sampler.karras_sample import karras_sample
 from sampler.random_util import get_generator
@@ -128,7 +129,7 @@ def sample_and_test(rank, gpu, args):
     to_range_0_1 = lambda x: (x + 1.0) / 2.0
 
     model = create_network(args).to(device)
-    first_stage_model = AutoencoderKL.from_pretrained(args.pretrained_autoencoder_ckpt).to(device)
+    first_stage_model = load_first_stage_model(args, device, torch.float32)
 
     ckpt = torch.load(
         "./saved_info/latent_flow/{}/{}/model_{}.pth".format(args.dataset, args.exp, args.epoch_id),
@@ -159,7 +160,7 @@ def sample_and_test(rank, gpu, args):
     generator = get_generator(args.generator, args.n_sample, seed)
 
     def run_sampling(num_samples, generator, cls_index=None):
-        x = generator.randn(num_samples, 4, args.image_size // 8, args.image_size // 8).to(device)
+        x = generator.randn(num_samples, args.num_in_channels, args.image_size // args.f, args.image_size // args.f).to(device)
         if args.num_classes in [None, 1]:
             model_kwargs = {}
         else:
@@ -190,7 +191,7 @@ def sample_and_test(rank, gpu, args):
         if args.cfg_scale > 1.0:
             fake_sample, _ = fake_sample.chunk(2, dim=0)  # Remove null class samples
 
-        fake_image = first_stage_model.decode(fake_sample / args.scale_factor).sample
+        fake_image = decode_from_latent(first_stage_model, fake_sample, args)
         return fake_image
 
     if args.compute_nfe:
@@ -198,7 +199,7 @@ def sample_and_test(rank, gpu, args):
         average_nfe = 0.0
         num_trials = 300
         for i in tqdm(range(num_trials)):
-            x_0 = generator.randn(1, 4, args.image_size // 8, args.image_size // 8).to(device)
+            x_0 = generator.randn(1, args.num_in_channels, args.image_size // args.f, args.image_size // args.f).to(device)
             if args.num_classes in [None, 1]:
                 model_kwargs = {}
             else:
@@ -222,7 +223,7 @@ def sample_and_test(rank, gpu, args):
 
     if args.measure_time:
         print("Measure time")
-        x = generator.randn(1, 4, args.image_size // 8, args.image_size // 8).to(device)
+        x = generator.randn(1, args.num_in_channels, args.image_size // args.f, args.image_size // args.f).to(device)
         # INIT LOGGERS
         starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         repetitions = 300
@@ -358,6 +359,10 @@ if __name__ == "__main__":
     parser.add_argument("--use_new_attention_order", type=bool, default=False)
 
     parser.add_argument("--pretrained_autoencoder_ckpt", type=str, default="stabilityai/sd-vae-ft-mse")
+    parser.add_argument("--ae_type", type=str, default="sd_vae", choices=["sd_vae", "conv_ae"],
+                        help="Type of autoencoder: 'sd_vae' (default) or 'conv_ae' (custom ConvAutoencoder)")
+    parser.add_argument("--ae_latent_dim", type=int, default=None, choices=[64, 128, 256, 384, 512, 1024],
+                        help="Latent dimension for conv_ae (required when ae_type='conv_ae')")
     parser.add_argument("--output_log", type=str, default="")
 
     #######################################
@@ -406,6 +411,12 @@ if __name__ == "__main__":
     parser.add_argument("--master_port", type=str, default="6000", help="port for master")
 
     args = parser.parse_args()
+
+    if args.ae_type == "conv_ae":
+        assert args.ae_latent_dim is not None, "ae_latent_dim must be specified when ae_type='conv_ae'"
+        expected_channels = args.ae_latent_dim // 16
+        args.num_in_channels = expected_channels
+
     args.world_size = args.num_proc_node * args.num_process_per_node
     size = args.num_process_per_node
 

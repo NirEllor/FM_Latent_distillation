@@ -9,17 +9,19 @@ from torchvision.datasets import CIFAR10, ImageNet
 
 def get_dataset(args):
     if args.dataset == "cifar10":
+        ae_type = getattr(args, "ae_type", "sd_vae")
+        transform_list = [
+            transforms.Resize(32),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+        ]
+        if ae_type != "conv_ae":
+            transform_list.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+
         dataset = CIFAR10(
             args.datadir,
             train=True,
-            transform=transforms.Compose(
-                [
-                    transforms.Resize(32),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                ]
-            ),
+            transform=transforms.Compose(transform_list),
         )
 
     elif args.dataset == "imagenet_256":

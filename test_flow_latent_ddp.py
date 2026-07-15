@@ -10,8 +10,8 @@ import os
 
 import torch
 import torch.distributed as dist
-from diffusers.models import AutoencoderKL
 from models import create_network
+from models.ae_backends import load_first_stage_model, decode_from_latent
 from PIL import Image
 from pytorch_fid.fid_score import calculate_fid_given_paths
 from sampler.random_util import get_generator
@@ -54,7 +54,7 @@ def main(args):
     model = create_network(args).to(device)
     # model = nn.parallel.DistributedDataParallel(model, device_ids=[device])
 
-    first_stage_model = AutoencoderKL.from_pretrained(args.pretrained_autoencoder_ckpt).to(device)
+    first_stage_model = load_first_stage_model(args, device, torch.float32)
 
     ckpt = torch.load("./saved_info/latent_flow/{}/{}/model_{}.pth".format(args.dataset, args.exp, args.epoch_id))
     print("Finish loading model")
@@ -81,7 +81,7 @@ def main(args):
     generator = get_generator(args.generator, args.n_sample, seed)
 
     def run_sampling(num_samples, generator):
-        x = generator.randn(num_samples, 4, args.image_size // 8, args.image_size // 8).to(device)
+        x = generator.randn(num_samples, args.num_in_channels, args.image_size // args.f, args.image_size // args.f).to(device)
         if args.num_classes in [None, 1]:
             model_kwargs = {}
         else:
@@ -107,7 +107,7 @@ def main(args):
         if args.cfg_scale > 1.0:
             fake_sample, _ = fake_sample.chunk(2, dim=0)  # Remove null class samples
 
-        fake_image = first_stage_model.decode(fake_sample / args.scale_factor).sample
+        fake_image = decode_from_latent(first_stage_model, fake_sample, args)
         return fake_image
 
     print("Compute fid")
@@ -212,6 +212,10 @@ if __name__ == "__main__":
     # parser.add_argument("--use_new_attention_order", type=bool, default=False)
 
     parser.add_argument("--pretrained_autoencoder_ckpt", type=str, default="stabilityai/sd-vae-ft-mse")
+    parser.add_argument("--ae_type", type=str, default="sd_vae", choices=["sd_vae", "conv_ae"],
+                        help="Type of autoencoder: 'sd_vae' (default) or 'conv_ae' (custom ConvAutoencoder)")
+    parser.add_argument("--ae_latent_dim", type=int, default=None, choices=[64, 128, 256, 384, 512, 1024],
+                        help="Latent dimension for conv_ae (required when ae_type='conv_ae')")
     parser.add_argument("--output_log", type=str, default="")
 
     #######################################
@@ -260,4 +264,10 @@ if __name__ == "__main__":
     parser.add_argument("--master_port", type=str, default="6000", help="port for master")
 
     args = parser.parse_args()
+
+    if args.ae_type == "conv_ae":
+        assert args.ae_latent_dim is not None, "ae_latent_dim must be specified when ae_type='conv_ae'"
+        expected_channels = args.ae_latent_dim // 16
+        args.num_in_channels = expected_channels
+
     main(args)
