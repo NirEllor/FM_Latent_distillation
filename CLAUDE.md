@@ -264,6 +264,57 @@ Keep commits focused and atomic—one logical change per commit. This makes the 
 - **sampler/**: ODE sampling utilities (Karras samplers, NFE counting)
 - **pytorch_fid/**: FID metric computation
 - **bash_scripts/**: Pre-configured training/testing commands
+- **slurm/**: SLURM cluster submission scripts for distributed training
+
+## SLURM Cluster Training (Distributed FM on Custom AE Latents)
+
+If you have 6 trained `ConvAutoencoder` checkpoints and want to train FM models on their latents in parallel across your SLURM cluster, use the provided scripts.
+
+### Prerequisites
+1. **ConvAutoencoder checkpoints** (`ae_<dim>.pt` for each dim):
+   - Place in `checkpoints/` directory (or update `CHECKPOINT_DIR` in `slurm/config.sh`)
+   - Files needed: `ae_64.pt`, `ae_128.pt`, `ae_256.pt`, `ae_384.pt`, `ae_512.pt`, `ae_1024.pt`
+   - Each checkpoint must match the format (has `{"latent_dim": ..., "state_dict": ...}`)
+
+2. **CIFAR-10 data**:
+   - Will auto-download to `./data` if missing
+   - Or point `DATADIR` in `slurm/config.sh` to existing dataset
+
+### Configuration
+Edit `slurm/config.sh`:
+- `EMAIL`: SLURM notification email
+- `PROJECT`: absolute path to this repo on your cluster
+- `RUN`: venv activation command (edit the venv path)
+- `CHECKPOINT_DIR`: where your `ae_<dim>.pt` files are stored (relative or absolute)
+
+### Submit Jobs
+```bash
+# Submit all 6 FM training jobs (one per AE dim)
+bash slurm/run_train_fm.sh
+
+# Or with job dependency chaining (e.g., wait for prior AE training)
+bash slurm/run_train_fm.sh "afterok:12345:12346"
+```
+
+### What Gets Trained
+Each job trains an **independent FM model** in the latent space of its corresponding AE:
+- **latent_64 FM**: 4-channel (64÷16) latents, `ddpm++` U-Net
+- **latent_128 FM**: 8-channel latents, `ddpm++` U-Net
+- **latent_256 FM**: 16-channel latents, `ddpm++` U-Net
+- **latent_384 FM**: 24-channel latents, `ddpm++` U-Net
+- **latent_512 FM**: 32-channel latents, `ddpm++` U-Net
+- **latent_1024 FM**: 64-channel latents, `ddpm++` U-Net
+
+All 6 FM models train **in parallel**, each using 1 GPU for 1000 epochs (≈2 days per job).
+
+### Key Details
+- **Latent-space training**: Images → AE encoder (deterministic, no sampling) → latents → FM learns velocity **in latent space only**
+- **Deterministic encoding**: `ConvAutoencoder.encode()` is fully deterministic (no KL sampling). Same image always → same latent
+- **Scale factor**: Computed **inline per job** by `compute_ae_scale_factor.py` — ensures correct normalization per checkpoint
+- **Architecture**: `ddpm++` (EDM-style conv U-Net), sized for 4×4 spatial latent grid
+- **Checkpoints**: Saved to `saved_info/latent_flow/cifar10/latent_<dim>/` every 50 epochs
+
+---
 
 ## Training
 

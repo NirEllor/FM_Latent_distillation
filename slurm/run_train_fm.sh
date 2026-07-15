@@ -17,6 +17,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 cd "$(dirname "$SCRIPT_DIR")"
 
+# Verify AE checkpoint files exist
+echo "Checking for ConvAutoencoder checkpoints in: $CHECKPOINT_DIR"
+for DIM in "${DIMS[@]}"; do
+  CKPT_FILE="$CHECKPOINT_DIR/ae_${DIM}.pt"
+  if [ ! -f "$CKPT_FILE" ]; then
+    echo "✗ ERROR: Checkpoint not found: $CKPT_FILE"
+    echo "  Make sure ae_<dim>.pt files are in the checkpoint directory."
+    exit 1
+  fi
+  echo "  ✓ Found ae_${DIM}.pt"
+done
+echo ""
+
 DEP_FLAG=""
 [ -n "${1:-}" ] && DEP_FLAG="--dependency=$1"
 
