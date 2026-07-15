@@ -14,13 +14,13 @@ NODE_ARGS=""
 
 # Absolute path to this repository on the cluster. Edit to match your setup.
 # Example: /cs/labs/raananf/ellorw.nir/FM_Latent_distillation
-PROJECT="/cs/labs/raananf/<USER>/FM_Latent_distillation"
+PROJECT="/cs/labs/raananf/ellorw.nir/FM_Latent_distillation"
 
 # Virtual environment activation + PYTHONPATH setup
 # Edit the venv path to match your cluster account.
 # The RUN variable is sourced in every sbatch --wrap command to ensure the env is active.
 # Example: /cs/labs/raananf/ellorw.nir/venv/bin/activate
-RUN="source /cs/labs/raananf/<USER>/venv/bin/activate && cd $PROJECT && export PYTHONPATH=$PROJECT:\$PYTHONPATH &&"
+RUN="source /cs/labs/raananf/ellorw.nir/venv/bin/activate && cd $PROJECT && export PYTHONPATH=$PROJECT:\$PYTHONPATH &&"
 
 # ============================================================================
 # STANDARD SETTINGS (usually no edit needed)
