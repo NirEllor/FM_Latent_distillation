@@ -79,8 +79,10 @@ def verify_model_shapes():
 
             status = f"✓ OK (out {y.shape})"
         except Exception as e:
-            status = f"✗ FAILED: {str(e)[:30]}"
+            error_msg = str(e)
+            status = f"✗ FAILED: {error_msg}"
             all_ok = False
+            print(f"  DEBUG ae_{dim}: {error_msg}")
 
         print(
             f"ae_{dim:<6} {num_channels:<12} {nf:<10} {bottleneck_ch:<12} {status}"
