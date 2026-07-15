@@ -33,6 +33,16 @@ class Args:
         self.num_blocks = 4
         self.dropout = 0.1
         self.label_dropout = 0.0
+        self.num_classes = None
+        self.use_origin_adm = False
+        self.layout = False
+        self.use_scale_shift_norm = True
+        self.resblock_updown = False
+        self.use_new_attention_order = False
+        self.num_heads = 4
+        self.num_head_channels = -1
+        self.num_head_upsample = -1
+        self.resamp_with_conv = True
 
 
 def verify_model_shapes():
