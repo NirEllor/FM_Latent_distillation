@@ -8,7 +8,7 @@ cd "$(dirname "$SCRIPT_DIR")"
 
 # Submit verification as a SLURM job
 JOB=$(sbatch $NODE_ARGS \
-  --mem=30G -c4 --gres=gpu:1 --time=00:30:00 \
+  --mem=50G -c4 --gres=gpu:1 --time=00:30:00 \
   --job-name=verify_fm_shapes \
   --wrap "bash -c '$RUN python slurm/verify_fm_shapes.py'" \
   | awk '{print $NF}')
