@@ -14,7 +14,7 @@ NODE_ARGS=""
 
 # Absolute path to this repository on the cluster. Edit to match your setup.
 # Example: /cs/labs/raananf/ellorw.nir/FM_Latent_distillation
-PROJECT="/cs/labs/raananf/ellorw.nir/FM_Latent_distillation"
+PROJECT="/cs/labs/raananf/ellorw.nir/distillation/FM_Latent_distillation"
 
 # Virtual environment activation + PYTHONPATH setup
 # Edit the venv path to match your cluster account.
