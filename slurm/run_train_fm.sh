@@ -41,8 +41,9 @@ MODEL_TYPE="ddpm++"
 LR=2e-4
 EMA=true
 EMA_DECAY=0.9999
-BATCH_SIZE=16
+BATCH_SIZE=8
 GRAD_CHECKPOINTING=true
+MIXED_PRECISION="bf16"
 NUM_EPOCH=1000
 SAVE_STEP=50
 GRAD_CLIP=1.0
@@ -83,7 +84,7 @@ for DIM in "${DIMS[@]}"; do
     --mem=30G -c4 --time=2-00 --gres=gpu:1 \
     --mail-type=ALL --mail-user="$EMAIL" \
     --job-name=fm_train_d${DIM} \
-    --wrap "bash -c '$RUN SCALE_FACTOR=\$(python compute_ae_scale_factor.py --ckpt $CHECKPOINT_DIR/ae_${DIM}.pt --latent_dim $DIM 2>/dev/null | grep -- \"--scale_factor\" | tail -1 | awk \"{print \\\$2}\") && echo \"Scale factor: \$SCALE_FACTOR\" && python train_flow_latent.py \
+    --wrap "bash -c '$RUN SCALE_FACTOR=\$(python compute_ae_scale_factor.py --ckpt $CHECKPOINT_DIR/ae_${DIM}.pt --latent_dim $DIM 2>/dev/null | grep -- \"--scale_factor\" | tail -1 | awk \"{print \\\$2}\") && echo \"Scale factor: \$SCALE_FACTOR\" && ACCELERATE_MIXED_PRECISION=$MIXED_PRECISION python train_flow_latent.py \
       --exp latent_${DIM} \
       --dataset cifar10 \
       --datadir $DATADIR \
