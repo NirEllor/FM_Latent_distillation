@@ -41,7 +41,8 @@ MODEL_TYPE="ddpm++"
 LR=2e-4
 EMA=true
 EMA_DECAY=0.9999
-BATCH_SIZE=64
+BATCH_SIZE=32
+GRAD_CHECKPOINTING=true
 NUM_EPOCH=1000
 SAVE_STEP=50
 GRAD_CLIP=1.0
@@ -101,6 +102,7 @@ for DIM in "${DIMS[@]}"; do
       --num_epoch $NUM_EPOCH \
       --lr $LR \
       --batch_size $BATCH_SIZE \
+      --use_grad_checkpointing \
       --save_content \
       --save_content_every $SAVE_STEP'" \
     | awk '{print $NF}')
