@@ -55,15 +55,14 @@ ATTN_RES="4"
 
 # Base model channels (nf). This determines the bottleneck capacity.
 # With ch_mult=[1,2,2], bottleneck_channels = nf * 2.
-# Set proportionally to latent dimension to ensure adequate bottleneck capacity:
-#   ae_64 (4 ch)  → nf=128 → bottleneck=256 (64× input capacity)
-#   ae_128 (8 ch) → nf=256 → bottleneck=512 (64× input capacity)
-#   ae_256 (16 ch)→ nf=512 → bottleneck=1024 (64× input capacity)
-#   ae_384 (24 ch)→ nf=768 → bottleneck=1536 (64× input capacity)
-#   ae_512 (32 ch)→ nf=1024→ bottleneck=2048 (64× input capacity)
-#   ae_1024(64 ch)→ nf=2048→ bottleneck=4096 (64× input capacity)
-# Formula: nf = latent_dim * 2 (ensures bottleneck = latent_dim * 4, i.e., 16× capacity)
-NF_BASE=2  # nf = latent_dim * NF_BASE
+# Formula: nf = latent_dim * 2 (ensures bottleneck capacity ≈ 64× input channels)
+# Examples with 60GB memory allocation:
+#   ae_64 (4 ch)  → nf=128 → bottleneck=256 channels
+#   ae_128 (8 ch) → nf=256 → bottleneck=512 channels
+#   ae_256 (16 ch)→ nf=512 → bottleneck=1024 channels
+#   ae_384 (24 ch)→ nf=768 → bottleneck=1536 channels
+#   ae_512 (32 ch)→ nf=1024→ bottleneck=2048 channels
+#   ae_1024(64 ch)→ nf=2048→ bottleneck=4096 channels
 
 # ============================================================================
 # Submit training jobs
@@ -79,28 +78,22 @@ for DIM in "${DIMS[@]}"; do
   # Pre-compute expected channel count
   NUM_CHANNELS=$((DIM / 16))
 
-  # Adaptive NF and batch size based on model size constraints
-  # Model size scales with nf^2. For 10.90GB GPU, we need to stay under ~800MB model
+  # Adaptive batch size based on model size (with increased memory, NF can be full capacity)
+  # NF formula: nf = latent_dim * 2 (ensures 64× bottleneck capacity)
+  NF=$((DIM * 2))
+
   if [ $DIM -le 128 ]; then
-    # Small models: nf = dim * 2
-    NF=$((DIM * 2))
     ADAPTIVE_BATCH=8
-  elif [ $DIM -eq 256 ]; then
-    # Medium: reduce NF scaling to fit
-    NF=$((DIM * 1))  # nf=256 instead of 512
+  elif [ $DIM -le 256 ]; then
+    ADAPTIVE_BATCH=6
+  elif [ $DIM -le 384 ]; then
     ADAPTIVE_BATCH=4
-  elif [ $DIM -eq 384 ]; then
-    # Larger: aggressive NF reduction
-    NF=$((DIM * 1 / 2))  # nf=192 instead of 768
-    ADAPTIVE_BATCH=4
-  elif [ $DIM -ge 512 ]; then
-    # Very large: minimal model
-    NF=$((DIM * 1 / 4))  # nf=128-256 instead of 1024-2048
+  else
     ADAPTIVE_BATCH=2
   fi
 
   JOB=$(sbatch $DEP_FLAG $NODE_ARGS \
-    --mem=30G -c4 --time=2-00 --gres=gpu:1 \
+    --mem=60G -c4 --time=4-00 --gres=gpu:1 \
     --mail-type=ALL --mail-user="$EMAIL" \
     --job-name=fm_train_d${DIM} \
     --wrap "bash -c '$RUN SCALE_FACTOR=\$(python compute_ae_scale_factor.py --ckpt $CHECKPOINT_DIR/ae_${DIM}.pt --latent_dim $DIM 2>/dev/null | grep -- \"--scale_factor\" | tail -1 | awk \"{print \\\$2}\") && echo \"Scale factor: \$SCALE_FACTOR\" && ACCELERATE_MIXED_PRECISION=$MIXED_PRECISION PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 python train_flow_latent.py \
