@@ -80,6 +80,16 @@ for DIM in "${DIMS[@]}"; do
   NUM_CHANNELS=$((DIM / 16))
   NF=$((DIM * NF_BASE))
 
+  # Adaptive batch size: larger models need smaller batches
+  # Model size scales with nf^2, so reduce batch size for larger dims
+  if [ $DIM -ge 512 ]; then
+    ADAPTIVE_BATCH=2
+  elif [ $DIM -ge 256 ]; then
+    ADAPTIVE_BATCH=4
+  else
+    ADAPTIVE_BATCH=$BATCH_SIZE
+  fi
+
   JOB=$(sbatch $DEP_FLAG $NODE_ARGS \
     --mem=30G -c4 --time=2-00 --gres=gpu:1 \
     --mail-type=ALL --mail-user="$EMAIL" \
@@ -102,13 +112,13 @@ for DIM in "${DIMS[@]}"; do
       --attn_resolutions $ATTN_RES \
       --num_epoch $NUM_EPOCH \
       --lr $LR \
-      --batch_size $BATCH_SIZE \
+      --batch_size $ADAPTIVE_BATCH \
       --use_grad_checkpointing \
       --save_content \
       --save_content_every $SAVE_STEP'" \
     | awk '{print $NF}')
 
-  echo "  ✓ Submitted fm_train dim=$DIM (channels=$NUM_CHANNELS, nf=$NF, bottleneck=$((NF*2))) → Job $JOB"
+  echo "  ✓ Submitted fm_train dim=$DIM (channels=$NUM_CHANNELS, nf=$NF, bottleneck=$((NF*2)), batch=$ADAPTIVE_BATCH) → Job $JOB"
   IDS+=($JOB)
 done
 
