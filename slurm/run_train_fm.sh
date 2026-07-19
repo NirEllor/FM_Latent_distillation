@@ -41,7 +41,7 @@ MODEL_TYPE="ddpm++"
 LR=2e-4
 EMA=true
 EMA_DECAY=0.9999
-BATCH_SIZE=32
+BATCH_SIZE=16
 GRAD_CHECKPOINTING=true
 NUM_EPOCH=1000
 SAVE_STEP=50
@@ -61,8 +61,8 @@ ATTN_RES="4"
 #   ae_384 (24 ch)→ nf=768 → bottleneck=1536 (64× input capacity)
 #   ae_512 (32 ch)→ nf=1024→ bottleneck=2048 (64× input capacity)
 #   ae_1024(64 ch)→ nf=2048→ bottleneck=4096 (64× input capacity)
-# Formula: nf = latent_dim * 8 (ensures bottleneck = latent_dim * 16, i.e., 64× capacity)
-NF_BASE=8  # nf = latent_dim * NF_BASE
+# Formula: nf = latent_dim * 2 (ensures bottleneck = latent_dim * 4, i.e., 16× capacity)
+NF_BASE=2  # nf = latent_dim * NF_BASE
 
 # ============================================================================
 # Submit training jobs
