@@ -76,18 +76,27 @@ echo ""
 
 IDS=()
 for DIM in "${DIMS[@]}"; do
-  # Pre-compute expected channel count and model_channels (nf)
+  # Pre-compute expected channel count
   NUM_CHANNELS=$((DIM / 16))
-  NF=$((DIM * NF_BASE))
 
-  # Adaptive batch size: larger models need smaller batches
-  # Model size scales with nf^2, so reduce batch size for larger dims
-  if [ $DIM -ge 512 ]; then
-    ADAPTIVE_BATCH=2
-  elif [ $DIM -ge 256 ]; then
+  # Adaptive NF and batch size based on model size constraints
+  # Model size scales with nf^2. For 10.90GB GPU, we need to stay under ~800MB model
+  if [ $DIM -le 128 ]; then
+    # Small models: nf = dim * 2
+    NF=$((DIM * 2))
+    ADAPTIVE_BATCH=8
+  elif [ $DIM -eq 256 ]; then
+    # Medium: reduce NF scaling to fit
+    NF=$((DIM * 1))  # nf=256 instead of 512
     ADAPTIVE_BATCH=4
-  else
-    ADAPTIVE_BATCH=$BATCH_SIZE
+  elif [ $DIM -eq 384 ]; then
+    # Larger: aggressive NF reduction
+    NF=$((DIM * 1 / 2))  # nf=192 instead of 768
+    ADAPTIVE_BATCH=4
+  elif [ $DIM -ge 512 ]; then
+    # Very large: minimal model
+    NF=$((DIM * 1 / 4))  # nf=128-256 instead of 1024-2048
+    ADAPTIVE_BATCH=2
   fi
 
   JOB=$(sbatch $DEP_FLAG $NODE_ARGS \
