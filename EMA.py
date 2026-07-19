@@ -30,9 +30,8 @@ class EMA(Optimizer):
         if not self.apply_ema:
             return retval
 
-        ema, params = {}, {}
         for group in self.optimizer.param_groups:
-            for i, p in enumerate(group["params"]):
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 state = self.optimizer.state[p]
@@ -40,25 +39,9 @@ class EMA(Optimizer):
                 # State initialization
                 if "ema" not in state:
                     state["ema"] = p.data.clone()
-
-                if p.shape not in params:
-                    params[p.shape] = {"idx": 0, "data": []}
-                    ema[p.shape] = []
-
-                params[p.shape]["data"].append(p.data)
-                ema[p.shape].append(state["ema"])
-
-            for i in params:
-                params[i]["data"] = torch.stack(params[i]["data"], dim=0)
-                ema[i] = torch.stack(ema[i], dim=0)
-                ema[i].mul_(self.ema_decay).add_(params[i]["data"], alpha=1.0 - self.ema_decay)
-
-            for p in group["params"]:
-                if p.grad is None:
-                    continue
-                idx = params[p.shape]["idx"]
-                self.optimizer.state[p]["ema"] = ema[p.shape][idx, :]
-                params[p.shape]["idx"] += 1
+                else:
+                    # Update EMA: ema = decay * ema + (1 - decay) * param
+                    state["ema"].mul_(self.ema_decay).add_(p.data, alpha=1.0 - self.ema_decay)
 
         return retval
 
